@@ -1,0 +1,48 @@
+import numpy as np
+from scipy import signal
+from scipy.optimize import minimize_scalar
+import random
+
+# Generate an initial filter coefficients vector using simulated annealing
+def initial_solution(d, H, n):
+    def cost(x):
+        return np.linalg.norm(d - np.dot(H, x))**2
+    x0 = np.zeros(n)
+    result = minimize_scalar(lambda T: cost(x0 + np.random.normal(scale=T, size=n)), bounds=(0, 1000), method='bounded')
+    return x0 + np.random.normal(scale=result.x, size=n)
+
+# Solve the optimization problem using sigmonal programming to obtain the optimal solution
+def solve_sparseness(d, H, x0, lamb):
+    def cost(x):
+        return np.linalg.norm(d - np.dot(H, x))**2 + lamb*np.linalg.norm(x, 1)
+    res = minimize_scalar(lambda alpha: cost(x0 + alpha*np.random.normal(size=len(x0))), bounds=(0, 1), method='bounded')
+    return x0 + res.x*np.random.normal(size=len(x0))
+
+# Apply thresholding to the filter coefficients vector to obtain the final sparse filter solution
+def threshold(x, thres):
+    return np.where(np.abs(x) > thres, x, 0)
+
+# Generate input and desired output signals
+n = 100
+x = np.linspace(0, 10*np.pi, n)
+d = np.sin(x) + 0.1*np.random.randn(n)
+
+# Generate filter impulse response matrix
+m = 10
+H = signal.convolve(np.eye(n), np.ones((m, n))/m, mode='valid')
+
+# Generate an initial filter coefficients vector using simulated annealing
+x0 = initial_solution(d, H, H.shape[1])
+
+# Solve the optimization problem using sigmonal programming to obtain the optimal solution
+lamb = 0.01
+sparseness_threshold = 0.05
+while True:
+    x = solve_sparseness(d, H, x0, lamb)
+    x0 = threshold(x, sparseness_threshold)
+    if np.count_nonzero(x0) <= 5:
+        break
+    lamb *= 10
+
+# Print the sparse filter coefficients vector
+print(x0)
